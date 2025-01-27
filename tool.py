@@ -20,14 +20,27 @@ def extract_entities(text):
 def extract_relationships(text):
     doc = nlp(text)
     relationships = []
+
     for token in doc:
+        # Check if the token is a subject and its head is a verb
         if token.dep_ == "nsubj" and token.head.pos_ == "VERB":
-            subject = token.text
-            verb = token.head.text
-            objects = [child.text for child in token.head.children if child.dep_ in ["dobj", "prep", "pobj"]]
-            for obj in objects:
-                relationships.append({"Subject": subject, "Relationship": verb, "Object": obj})
+            # Ensure the subject is meaningful
+            if token.pos_ not in ["PRON", "DET", "ADP", "CCONJ"]:  # Exclude pronouns, determiners, prepositions, and connectors
+                subject = token.text
+                verb = token.head.text
+
+                # Find objects of the verb, excluding prepositions and connectors
+                objects = [
+                    child.text
+                    for child in token.head.children
+                    if child.dep_ in ["dobj", "pobj"] and child.pos_ not in ["ADP", "CCONJ"]
+                ]
+
+                for obj in objects:
+                    relationships.append({"Subject": subject, "Relationship": verb, "Object": obj})
+
     return relationships
+
 
 # Data validation function
 def validate_data(df, expected_columns):
