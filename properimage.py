@@ -1,6 +1,6 @@
 import torch
 from transformers import AutoTokenizer, AutoModelForTokenClassification, pipeline
-from sklearn.metrics.pairwise import cosine_similarity
+import spacy
 import networkx as nx
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -11,6 +11,9 @@ tokenizer = AutoTokenizer.from_pretrained(model_name)
 ner_model = AutoModelForTokenClassification.from_pretrained(model_name)
 ner_pipeline = pipeline("ner", model=ner_model, tokenizer=tokenizer, aggregation_strategy="simple")
 
+# Load SpaCy for dependency parsing
+nlp = spacy.load("en_core_web_sm")
+
 # Load dataset from CSV file
 def load_dataset(file_path):
     data = pd.read_csv(file_path)
@@ -18,65 +21,72 @@ def load_dataset(file_path):
         raise ValueError("The dataset must contain a 'Text' column.")
     return data
 
-# Function to extract entities and relationships
-def extract_entities_and_relationships(text):
-    # Step 1: Extract entities using NER pipeline
-    ner_results = ner_pipeline(text)
 
-    # Step 2: Form entity pairs and compute relationships
-    entities = [res['word'] for res in ner_results if res['entity_group'] in ['PER', 'ORG', 'LOC']]
+# Function to extract relationships
+def extract_relationships(text):
+    doc = nlp(text)
     relationships = []
-    for i, ent1 in enumerate(entities):
-        for ent2 in entities[i + 1:]:
-            # Encode entities as token embeddings
-            encoded_ent1 = tokenizer.encode(ent1, return_tensors='pt')
-            encoded_ent2 = tokenizer.encode(ent2, return_tensors='pt')
 
-            # Debug: Print shapes
-            print(f"Encoded entity 1 shape: {encoded_ent1.shape}")
-            print(f"Encoded entity 2 shape: {encoded_ent2.shape}")
+    for token in doc:
+        # Check if the token is a subject and its head is a verb
+        if token.dep_ == "nsubj" and token.head.pos_ == "VERB":
+            # Ensure the subject is meaningful
+            if token.pos_ not in ["PRON", "DET", "ADP", "CCONJ"]:  # Exclude pronouns, determiners, prepositions, and connectors
+                subject = token.text
+                verb = token.head.text
 
-            # Ensure compatibility by aligning dimensions
-            min_dim = min(encoded_ent1.shape[1], encoded_ent2.shape[1])
-            encoded_ent1 = encoded_ent1[:, :min_dim]
-            encoded_ent2 = encoded_ent2[:, :min_dim]
+                # Find objects of the verb, excluding prepositions and connectors
+                objects = [
+                    child.text
+                    for child in token.head.children
+                    if child.dep_ in ["dobj", "pobj"] and child.pos_ not in ["ADP", "CCONJ"]
+                ]
 
-            # Compute similarity
-            similarity = cosine_similarity(encoded_ent1.numpy(), encoded_ent2.numpy())
-            relationships.append((ent1, ent2, similarity[0][0]))  # Convert tensor similarity to scalar
+                for obj in objects:
+                    relationships.append({"Subject": subject, "Relationship": verb, "Object": obj})
 
-    return entities, relationships
+    return relationships
 
-# Visualize relationships as a network graph
-def visualize_relationships(entities, relationships):
-    G = nx.Graph()
 
-    # Add nodes for entities
-    G.add_nodes_from(entities)
+# Visualize directional relationships as a directed graph
+# ... Previous code for extracting entities and relationships ...
 
-    # Add edges for relationships
-    for ent1, ent2, similarity in relationships:
-        if similarity > 0.5:  # Threshold to filter meaningful relationships
-            G.add_edge(ent1, ent2, weight=similarity)
+# Visualize directional relationships as a directed graph
+def visualize_relationships(relationships):
+    G = nx.DiGraph()
 
-    # Draw the graph
-    pos = nx.spring_layout(G)
-    plt.figure(figsize=(10, 8))
-    nx.draw(G, pos, with_labels=True, node_color='lightblue', edge_color='gray', node_size=2000, font_size=10)
-    plt.title("Entity Relationship Graph")
+
+
+    # Add edges for relationships with labels
+    for rel in relationships:
+        print(f"Adding edge: {rel['Subject']} --{rel['Relationship']}--> {rel['Object']}")  # Debug
+        G.add_edge(rel["Subject"], rel["Object"], label=rel["Relationship"])
+
+    # Draw the graph with relationship labels
+    pos = nx.spring_layout(G)  # Layout for graph
+    plt.figure(figsize=(12, 8))
+    nx.draw(
+        G, pos, with_labels=True, node_color="lightblue", edge_color="gray",
+        node_size=2000, font_size=10, arrowsize=20
+    )
+
+    # Add edge labels (relationship words)
+    edge_labels = nx.get_edge_attributes(G, 'label')
+    nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_color="red", font_size=10)
+    
+    plt.title("Entity Relationship Graph with Actions")
     plt.show()
 
 # Example usage
 file_path = "Datasets/news_excerpts_parsed.csv"  # Replace with your CSV file path
 data = load_dataset(file_path)
 
-# Process first sample for demonstration
-sample_text = data['Text'][0]
-entities, relationships = extract_entities_and_relationships(sample_text)
+# Process the first sample for demonstration
+sample_text = data['Text'][5]
+relationships = extract_relationships(sample_text)
 
-# Display extracted entities and relationships
-print("Entities:", entities)
 print("Relationships:", relationships)
 
 # Visualize relationships
-visualize_relationships(entities, relationships)
+visualize_relationships(relationships)
+
