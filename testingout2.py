@@ -75,13 +75,24 @@ def visualize_relationships(entities, relationships):
     G = nx.Graph()
     G.add_nodes_from(entities)
     for ent1, ent2, similarity in relationships:
-        if similarity > 0.5:
+        if similarity > 0.5:  # Only add edges with similarity > 0.5
             G.add_edge(ent1, ent2, weight=similarity)
-    pos = nx.spring_layout(G)
-    plt.figure(figsize=(10, 8))
-    nx.draw(G, pos, with_labels=True, node_color='lightblue', edge_color='gray', node_size=2000, font_size=10)
-    plt.title("Entity Relationship Graph")
-    plt.show()
+    
+    if len(entities) > 0:  # Proceed if there are any entities
+        pos = nx.spring_layout(G)
+        plt.figure(figsize=(10, 8))
+        nx.draw(G, pos, with_labels=True, node_color='lightblue', edge_color='gray', node_size=2000, font_size=10)
+        plt.title("Entity Relationship Graph")
+        plt.show()
+
+# Process multiple files with batch processing
+def process_in_batches(texts, batch_size=32):
+    all_results = []
+    for i in tqdm(range(0, len(texts), batch_size), desc="Processing in Batches"):
+        batch = texts[i:i + batch_size]
+        batch_results = ner_pipeline(batch)  # Process a batch
+        all_results.extend(batch_results)  # Collect results
+    return all_results
 
 # Process multiple files with progress bar
 def process_files(file_paths, expected_columns, output_file=None):
@@ -95,6 +106,10 @@ def process_files(file_paths, expected_columns, output_file=None):
         data["Entities"], data["Relationships"] = zip(
             *data["Text"].progress_apply(extract_entities_and_relationships)
         )
+
+        # Visualize relationships as a network graph after processing each file
+        for entities, relationships in zip(data["Entities"], data["Relationships"]):
+            visualize_relationships(entities, relationships)
         
         all_data.append(data)
 
