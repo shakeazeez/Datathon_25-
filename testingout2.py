@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import spacy
 from tqdm import tqdm  # For progress bar
+import matplotlib.patches as mpatches
 
 # Check for GPU availability and set device
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -56,33 +57,88 @@ def extract_entities_and_relationships(text):
     # Remove duplicates from entities
     entities = list(set(entities))
 
-    # Form relationships
+    # Limit entities to 75% of the total number found
+    entity_limit = int(len(entities) * 0.75)
+    entities = entities[:entity_limit]
+
+    # Form relationships with meaningful labels based on text content
     relationships = []
     for i, ent1 in enumerate(entities):
         for ent2 in entities[i + 1:]:
-            encoded_ent1 = tokenizer.encode(ent1, return_tensors='pt').to(device)
-            encoded_ent2 = tokenizer.encode(ent2, return_tensors='pt').to(device)
-            min_dim = min(encoded_ent1.shape[1], encoded_ent2.shape[1])
-            encoded_ent1 = encoded_ent1[:, :min_dim]
-            encoded_ent2 = encoded_ent2[:, :min_dim]
-            similarity = cosine_similarity(encoded_ent1.cpu().numpy(), encoded_ent2.cpu().numpy())
-            relationships.append((ent1, ent2, similarity[0][0]))
+            # Try to find relationships between entities by analyzing text for certain patterns (this is an example heuristic)
+            relationship_label = extract_relationship_from_text(text, ent1, ent2)
+            
+            # If no relationship found, fall back to similarity
+            if not relationship_label:
+                relationship_label = f"Similarity: {compute_similarity(ent1, ent2):.2f}"
+
+            relationships.append((ent1, ent2, relationship_label))
     
     return entities, relationships
 
-# Visualize relationships as a network graph
+# Function to extract a relationship based on text context (simple heuristic example)
+def extract_relationship_from_text(text, ent1, ent2):
+    # Simple heuristics to match verbs or actions between entities
+    possible_relationships = [
+        ("works with", ["works", "collaborates", "associates"]),
+        ("stole from", ["stole", "robbed", "thief"]),
+        ("located in", ["located", "found"]),
+        ("is a part of", ["part of", "member of", "included in"]),
+        ("stabbed", ["stabbed", "attacked", "injured"]),
+        # Add more relationship patterns here as needed
+    ]
+
+    for relationship, verbs in possible_relationships:
+        for verb in verbs:
+            if verb in text.lower() and ent1.lower() in text.lower() and ent2.lower() in text.lower():
+                return relationship
+    
+    return None
+
+# Compute similarity between two entities (fallback when no relationship found)
+def compute_similarity(ent1, ent2):
+    encoded_ent1 = tokenizer.encode(ent1, return_tensors='pt').to(device)
+    encoded_ent2 = tokenizer.encode(ent2, return_tensors='pt').to(device)
+    min_dim = min(encoded_ent1.shape[1], encoded_ent2.shape[1])
+    encoded_ent1 = encoded_ent1[:, :min_dim]
+    encoded_ent2 = encoded_ent2[:, :min_dim]
+    similarity = cosine_similarity(encoded_ent1.cpu().numpy(), encoded_ent2.cpu().numpy())[0][0]
+    return similarity
+
+# Visualize relationships as a network graph with labels on lines
 def visualize_relationships(entities, relationships):
     G = nx.Graph()
     G.add_nodes_from(entities)
-    for ent1, ent2, similarity in relationships:
-        if similarity > 0.5:  # Only add edges with similarity > 0.5
-            G.add_edge(ent1, ent2, weight=similarity)
+    
+    # Add edges with relationship labels as edge attributes
+    for ent1, ent2, label in relationships:
+        G.add_edge(ent1, ent2, label=label)
     
     if len(entities) > 0:  # Proceed if there are any entities
         pos = nx.spring_layout(G)
-        plt.figure(figsize=(10, 8))
-        nx.draw(G, pos, with_labels=True, node_color='lightblue', edge_color='gray', node_size=2000, font_size=10)
+        plt.figure(figsize=(12, 10))
+        
+        # Draw nodes with rectangular shapes
+        node_rectangles = {}
+        for node, (x, y) in pos.items():
+            node_rectangles[node] = [x - 0.05, y - 0.05, x + 0.05, y + 0.05]  # Adjust rectangle size
+
+        # Draw the rectangular nodes
+        for node, rect in node_rectangles.items():
+            plt.gca().add_patch(mpatches.FancyBboxPatch((rect[0], rect[1]), rect[2] - rect[0], rect[3] - rect[1], 
+                                                        boxstyle="round,pad=0.05", ec="black", fc="lightblue"))
+            plt.text((rect[0] + rect[2]) / 2, (rect[1] + rect[3]) / 2, node, 
+                     ha="center", va="center", fontsize=10)
+
+        # Draw edges
+        nx.draw_networkx_edges(G, pos, edgelist=relationships, edge_color='gray', width=1.0)
+        
+        # Draw edge labels (the relationship names)
+        edge_labels = nx.get_edge_attributes(G, 'label')
+        nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_size=8, font_color='red')
+        
         plt.title("Entity Relationship Graph")
+        plt.axis('off')  # Hide axes
         plt.show()
 
 # Process multiple files with batch processing
