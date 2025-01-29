@@ -9,16 +9,15 @@ from spacy.matcher import Matcher
 from tqdm import tqdm
 import ast
 
-# -------------------- Configuration --------------------
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# Configuration
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 print(f"Device set to use: {DEVICE}")
 
-# Model configuration: Adjust MODEL_NAME to change speed/accuracy trade-offs
-MODEL_NAME = "dbmdz/bert-large-cased-finetuned-conll03-english"  # Can be replaced with a faster/lighter model
-ENTITY_LIMIT_FACTOR = 0.75  # Adjust to filter less meaningful entities (lower = stricter filtering)
-BATCH_SIZE = 32  # Modify to process larger/smaller text batches for performance tuning
+MODEL_NAME = "dbmdz/bert-large-cased-finetuned-conll03-english"
+ENTITY_LIMIT_FACTOR = 0.75
+BATCH_SIZE = 32
 FILE_PATHS = ["Datasets/news_excerpts_parsed.xlsx", "Datasets/wikileaks_parsed.xlsx"]
-OUTPUT_FILE = "combined_results.xlsx"  # Output file for processed results
+OUTPUT_FILE = "combined_results.xlsx"
 
 # Initialize BERT model and tokenizer
 tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
@@ -28,13 +27,15 @@ nlp_pipeline = pipeline("ner", model=model, tokenizer=tokenizer, device=0 if tor
 # Initialize spaCy with neural model for better dependency parsing
 nlp = spacy.load("en_core_web_trf")
 
-# Relationship patterns
+# Enhanced Relationship patterns
 def init_relationship_matcher():
     matcher = Matcher(nlp.vocab)
     patterns = [
         [{"DEP": "nsubj"}, {"DEP": "prep"}, {"DEP": "pobj"}],
         [{"DEP": "nsubj"}, {"DEP": "dobj"}],
         [{"DEP": "nsubjpass"}, {"DEP": "prep"}],
+        [{"DEP": "num"}, {"DEP": "quantmod"}],  # Fixed numerical relationships
+        [{"DEP": "appos"}]  # Fixed appositive relationships
     ]
     for pattern in patterns:
         matcher.add("RELATION", [pattern])
@@ -42,23 +43,11 @@ def init_relationship_matcher():
 
 matcher = init_relationship_matcher()
 
-# -------------------- Functions --------------------
-def clean_entities(entities):
-    """Removes duplicates and ensures entity names are meaningful."""
-    clean_set = set()
-    meaningful_entities = []
-    for word, entity in entities:
-        word = word.strip()
-        if word not in clean_set and len(word) > 2 and '#' not in word:  # Filter short/irrelevant names
-            clean_set.add(word)
-            meaningful_entities.append((word, entity))
-    return meaningful_entities
-
 def extract_entities(text):
     """Extracts entities from text using the NER pipeline."""
-    ner_results = nlp_pipeline(text)  # Extract named entities
-    entities = [(result["word"], result["entity"]) for result in ner_results]
-    return clean_entities(entities)  # Clean and deduplicate entities
+    ner_results = nlp_pipeline(text)
+    entities = list(set([(result["word"], result["entity"]) for result in ner_results]))
+    return entities
 
 def extract_relationships(text, entities):
     """Extracts relationships between entities in text."""
@@ -67,8 +56,8 @@ def extract_relationships(text, entities):
 
     for ent1, _ in entities:
         for ent2, _ in entities:
-            if ent1 != ent2:  # Ensure relationships are not self-loops
-                for sent in doc.sents:  # Process sentence by sentence
+            if ent1 != ent2:
+                for sent in doc.sents:
                     if ent1 in sent.text and ent2 in sent.text:
                         matches = matcher(sent)
                         for _, start, end in matches:
@@ -77,10 +66,14 @@ def extract_relationships(text, entities):
                                 relationships.append((ent1, ent2, span.text))
                                 break
 
-    if not relationships:
-        print(f"No relationships found in text: {text}")
-    else:
-        print(f"Extracted relationships from text: {relationships}")
+    for sent in doc.sents:
+        for token in sent:
+            if token.lemma_ in ["be", "have", "say"]:
+                subjects = [child.text for child in token.head.children if child.dep_ in ["nsubj", "nsubjpass"]]
+                objects = [child.text for child in token.head.children if child.dep_ in ["dobj", "pobj"]]
+                for subj in subjects:
+                    for obj in objects:
+                        relationships.append((subj, obj, f"{token.lemma_} {token.head.text}"))
 
     return relationships
 
@@ -90,62 +83,62 @@ def process_files():
 
     for file_path in FILE_PATHS:
         df = pd.read_excel(file_path)
-        texts = df["Text"].tolist()  # Assuming a "Text" column
+        texts = df["Text"].dropna().tolist()  # Fixed potential missing values
         dataset = Dataset.from_dict({"text": texts})
 
-        # Process in batches for efficiency
-        for batch in tqdm(dataset.to_dict()["text"], desc=f"Processing {file_path}"):
-            entities = extract_entities(batch)  # Extract entities
-            print(f"Extracted entities: {entities}")
-            relationships = extract_relationships(batch, entities)  # Extract relationships
+        for batch in tqdm(dataset["text"], desc=f"Processing {file_path}"):
+            entities = extract_entities(batch)
+            relationships = extract_relationships(batch, entities)
             all_data.append({"Text": batch, "Entities": entities, "Relationships": relationships})
 
-    # Save results to an output file
     processed_data = pd.DataFrame(all_data)
     processed_data.to_excel(OUTPUT_FILE, index=False)
     print(f"Data saved to {OUTPUT_FILE}")
 
 def visualize_relationships(entities, relationships, title="Entity Relationship Graph"):
-    """Visualizes relationships using NetworkX."""
-    G = nx.DiGraph()  # Use Directed Graph for better visual clarity
-    G.add_nodes_from([ent[0] for ent in entities])
+    """Visualizes relationships using NetworkX with enhanced styling."""
+    G = nx.Graph()
+    G.add_nodes_from([e[0] for e in entities])
+    meaningful_rels = [(u, v, l) for u, v, l in relationships if l]
+    
+    if not meaningful_rels:
+        print("No meaningful relationships found to visualize.")
+        return
 
-    # Add edges with labels
-    for ent1, ent2, label in relationships:
-        if ent1 in G.nodes and ent2 in G.nodes:
-            G.add_edge(ent1, ent2, label=label)
+    G.add_edges_from([(u, v, {"label": l}) for u, v, l in meaningful_rels])
+    plt.figure(figsize=(10, 7))
+    pos = nx.spring_layout(G)
 
-    # Visualization layout configuration
-    pos = nx.spring_layout(G, k=0.5)  # Adjust 'k' to modify node spacing
-    plt.figure(figsize=(15, 12))
-    nx.draw_networkx_nodes(G, pos, node_size=3000, node_color="lightgreen", alpha=0.9)  # Customize node size/color
-    nx.draw_networkx_edges(G, pos, arrows=True, alpha=0.7, edge_color="gray")
-    nx.draw_networkx_labels(G, pos, font_size=10, font_weight="bold")
+    nx.draw(G, pos, with_labels=True, node_size=3000, node_color="#4ECDC4", edge_color="#C4ECD4")
     edge_labels = nx.get_edge_attributes(G, "label")
-    nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_color="blue", font_size=9)
-
-    # Finalize and display the plot
-    plt.title(title, fontsize=16)
-    plt.axis("off")
-    plt.tight_layout()
+    nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels)
+    plt.title(title)
     plt.show()
 
 def load_and_visualize():
     """Loads processed data and visualizes relationships."""
     try:
-        # Load processed results from the output file
         df = pd.read_excel(OUTPUT_FILE)
-        df["Entities"] = df["Entities"].apply(ast.literal_eval)  # Parse stringified lists
+        df["Entities"] = df["Entities"].apply(ast.literal_eval)
         df["Relationships"] = df["Relationships"].apply(ast.literal_eval)
 
-        # Visualize each text's relationships
+        combined_G = nx.Graph()
         for _, row in df.iterrows():
-            visualize_relationships(row["Entities"], row["Relationships"], title="Entity Relationship Graph")
+            entities = row["Entities"]
+            relationships = row["Relationships"]
+            visualize_relationships(entities, relationships, title="Individual Document Relationships")
 
+            combined_G.add_nodes_from([e[0] for e in entities])
+            combined_G.add_edges_from([(rel[0], rel[1], {"label": rel[2]}) for rel in relationships])
+
+        visualize_relationships(
+            list(combined_G.nodes),
+            [(u, v, d["label"]) for u, v, d in combined_G.edges(data=True)],
+            title="Combined Relationship Graph"
+        )
     except FileNotFoundError:
         print(f"Error: {OUTPUT_FILE} not found. Run processing first.")
 
-# -------------------- Execution --------------------
 if __name__ == "__main__":
     print("Select an option:")
     print("1: Process data files")
