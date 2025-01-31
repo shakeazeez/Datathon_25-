@@ -82,8 +82,11 @@ file_path = "Datasets/news_excerpts_parsed.csv"  # Replace with your CSV file pa
 data = load_dataset(file_path)
 
 # Process the first sample for demonstration
-sample_text = data['Text'][5]
-relationships = extract_relationships(sample_text)
+for data_thing in data['Text']:
+    print(data_thing)
+    relationships = extract_relationships(data_thing)
+    print("Relationships:", relationships)
+    visualize_relationships(relationships)
 
 print("Relationships:", relationships)
 
