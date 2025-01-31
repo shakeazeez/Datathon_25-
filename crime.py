@@ -9,7 +9,7 @@ tokenizer = AutoTokenizer.from_pretrained(model_name)
 ner_model = AutoModelForTokenClassification.from_pretrained(model_name)
 ner_pipeline = pipeline("ner", model=ner_model, tokenizer=tokenizer, aggregation_strategy="simple")
 
-# Load SpaCy for dependency parsing
+# Load SpaCy for dependency parsing and lemmatization
 nlp = spacy.load("en_core_web_sm")
 
 # Load dataset from CSV file
@@ -38,36 +38,36 @@ def extract_relationships(text):
                     relationships.append({"Subject": subject, "Relationship": verb, "Object": obj})
     return relationships
 
-# Map relationships to expanded crime categories
+# Map relationships to crime categories using lemmatization
 def map_to_crime_categories(relationships):
-    # Define expanded crime categories and their associated keywords
+    # Define crime categories and their associated keywords
     crime_categories = {
         "Murder": ["murder", "kill", "homicide", "manslaughter"],
-        "Thievery": ["stole", "theft", "robbed", "burglary", "shoplifting"],
-        "Fraud": ["fraud", "scam", "deceit", "embezzlement", "forgery"],
-        "Assault": ["assault", "attack", "violence", "battery"],
+        "Thievery": ["steal", "theft", "rob", "burglary", "shoplift"],
+        "Fraud": ["fraud", "scam", "deceive", "embezzle", "forge"],
+        "Assault": ["assault", "attack", "violate", "batter"],
         "Kidnapping": ["kidnap", "abduct", "hostage"],
-        "Arson": ["arson", "fire", "burn"],
-        "Drug Trafficking": ["drug", "trafficking", "narcotics"],
-        "Cybercrime": ["hacking", "cyber", "phishing", "malware"],
-        "Terrorism": ["terrorism", "bombing", "extremism", "radical"],
-        "Bribery": ["bribery", "corruption", "kickback"],
-        "Sexual Assault": ["rape", "molest", "sexual assault", "harassment"],
-        "Extortion": ["extort", "blackmail", "coercion"],
-        "Money Laundering": ["launder", "money laundering", "dirty money"],
-        "Human Trafficking": ["human trafficking", "smuggling", "exploitation"],
-        "Vandalism": ["vandalism", "graffiti", "property damage"],
+        "Arson": ["arson", "burn", "fire"],
+        "Drug Trafficking": ["drug", "traffic", "narcotic"],
+        "Cybercrime": ["hack", "cyber", "phish", "malware"],
+        "Terrorism": ["terrorize", "bomb", "extremism", "radicalize"],
+        "Bribery": ["bribe", "corrupt", "kickback"],
+        "Sexual Assault": ["rape", "molest", "harass", "assault"],
+        "Extortion": ["extort", "blackmail", "coerce"],
+        "Money Laundering": ["launder", "money laundering", "clean money"],
+        "Human Trafficking": ["traffick", "smuggle", "exploit"],
+        "Vandalism": ["vandalize", "graffiti", "damage"],
         "Weapons Offense": ["firearm", "weapon", "gun", "knife"],
         "Smuggling": ["smuggle", "contraband", "illicit trade"],
-        "Public Disorder": ["riot", "unrest", "disturbance"],
-        "Counterfeiting": ["counterfeit", "fake", "imitation"],
-        "Poaching": ["poach", "wildlife crime", "illegal hunting"],
-        "Tax Evasion": ["tax evasion", "tax fraud", "evasion"],
-        "Perjury": ["perjury", "false testimony", "lying under oath"],
-        "Espionage": ["espionage", "spying", "intelligence leak"],
-        "Identity Theft": ["identity theft", "impersonation", "identity fraud"],
-        "Illegal Immigration": ["illegal immigration", "border crossing", "undocumented"],
-        "Domestic Violence": ["domestic violence", "abuse", "intimate partner violence"]
+        "Public Disorder": ["riot", "disturb", "unrest"],
+        "Counterfeiting": ["counterfeit", "fake", "forge"],
+        "Poaching": ["poach", "wildlife crime", "hunt illegally"],
+        "Tax Evasion": ["evade", "tax fraud", "evasion"],
+        "Perjury": ["perjure", "lie under oath", "false testimony"],
+        "Espionage": ["spy", "espionage", "leak intelligence"],
+        "Identity Theft": ["steal identity", "impersonate", "identity fraud"],
+        "Illegal Immigration": ["immigrate illegally", "border cross", "undocumented"],
+        "Domestic Violence": ["domestic abuse", "intimate partner violence"]
     }
 
     categorized_data = []
@@ -75,9 +75,12 @@ def map_to_crime_categories(relationships):
         # Combine verb and object for easier matching
         action = f"{rel['Relationship']} {rel['Object']}".lower()
 
+        # Lemmatize the action for comparison
+        action_lemmas = [token.lemma_ for token in nlp(action)]
+
         # Check which category the action belongs to
         for category, keywords in crime_categories.items():
-            if any(keyword in action for keyword in keywords):
+            if any(keyword in action_lemmas for keyword in keywords):
                 categorized_data.append({"Category": category, "Action": action})
                 break
 
@@ -107,9 +110,10 @@ for text in data['Text']:
     relationships = extract_relationships(text)
     all_relationships.extend(relationships)
 
-# Map relationships to expanded crime categories
+# Map relationships to crime categories
 categorized_data = map_to_crime_categories(all_relationships)
 
 # Analyze and visualize crime categories
 analyze_and_visualize_crimes(categorized_data)
+
 
