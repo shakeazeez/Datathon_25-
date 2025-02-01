@@ -139,6 +139,24 @@ def analyze_and_visualize_crimes(categorized_data):
     fig.update_layout(xaxis_tickangle=45)
     fig.show()
 
+# Tokenization function with token type visualization
+def tokenize_text(text):
+    text2 = merge_tokens(text)
+    doc = nlp(text2)
+    tokens_info = [(token.text, token.pos_) for token in doc]
+    print("\n\nTokenized Text:", end = ' ')
+    for token, pos in tokens_info:
+        print(f"{token}: {pos}",end = ", ")
+    
+    print("\n\nNormal Text:", end = ' ')
+    for token, pos in tokens_info:
+        print(f"{token}",end = " ")
+
+
+
+
+
+
 def main():
     file_path = "Datasets/news_excerpts_parsed.xlsx"
     data = load_dataset(file_path)
@@ -148,6 +166,7 @@ def main():
         print("1. Extract and save Relationships to File")
         print("2. Visualize Relationships")
         print("3. Visualize Crime Categories")
+        print("4. Tokenize Text")
         print("Q. Quit")
         choice = input("Enter choice: ").strip().lower()
         
@@ -172,6 +191,17 @@ def main():
                 all_relationships.extend(extract_relationships(text))
             categorized_data = map_to_crime_categories(all_relationships)
             analyze_and_visualize_crimes(categorized_data)
+
+        elif choice == "4":
+            count = 0
+            while True:
+                sample_text = data['Text'][count] if not data.empty else "No data available"
+                count += 1
+                tokenize_text(sample_text)
+                print("\n\nEnter Y to continue seeing tokens, N to exit!")
+                out = input("Enter choice: ").strip().lower()
+                if out == 'n':
+                    break
         
         elif choice == "q":
             break
@@ -180,3 +210,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
