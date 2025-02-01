@@ -1,3 +1,4 @@
+import torch
 from transformers import AutoTokenizer, AutoModelForTokenClassification, pipeline
 import spacy
 import networkx as nx
@@ -6,11 +7,23 @@ import pandas as pd
 import plotly.express as px
 from tqdm import tqdm
 
-# Load pretrained BERT model and tokenizer for Named Entity Recognition (NER)
+
+# Detect the best available device
+if torch.cuda.is_available():  
+    device = torch.device("cuda")  # NVIDIA GPU or AMD GPU with ROCm
+elif torch.backends.mps.is_available():  
+    device = torch.device("mps")  # Apple Silicon (M1/M2/M3)
+else:
+    device = torch.device("cpu")  # Default to CPU
+
+# Load model and tokenizer
 model_name = "dbmdz/bert-large-cased-finetuned-conll03-english"
 tokenizer = AutoTokenizer.from_pretrained(model_name)
-ner_model = AutoModelForTokenClassification.from_pretrained(model_name)
-ner_pipeline = pipeline("ner", model=ner_model, tokenizer=tokenizer, aggregation_strategy="simple")
+ner_model = AutoModelForTokenClassification.from_pretrained(model_name).to(device)
+
+# Create NER pipeline
+ner_pipeline = pipeline("ner", model=ner_model, tokenizer=tokenizer, aggregation_strategy="simple", device=0 if device.type in ["cuda", "mps"] else -1)
+
 
 # Load SpaCy for dependency parsing
 nlp = spacy.load("en_core_web_sm")
