@@ -96,11 +96,16 @@ def visualize_relationships(relationships):
 
 # Tokenization function with token type visualization
 def tokenize_text(text):
-    doc = nlp(text)
+    text2 = merge_tokens(text)
+    doc = nlp(text2)
     tokens_info = [(token.text, token.pos_) for token in doc]
     print("Tokenized Text:")
     for token, pos in tokens_info:
         print(f"{token}: {pos}",end = ", ")
+    
+    print("\nNormal Text:")
+    for token, pos in tokens_info:
+        print(f"{token}",end = " ")
 
 # Main menu-driven function
 def main():
