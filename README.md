@@ -24,12 +24,12 @@ This repository contains a Python-based pipeline for extracting, analyzing, and 
 
 ## Usage  
 1. **Prepare your dataset**: Ensure your dataset is in an Excel (`.xlsx`) format with a column named `Text`.  
-2. **Run the script**: Execute `python main.py` and select from the menu:  
+2. **Run the script**: Execute `EntityFinder.py` or `crime.py` and select from the menu:
    - Extract relationships  
    - Visualize relationships  
    - Analyze crime categories  
    - Tokenize text  
 3. **Output files**:  
-   - Extracted relationships are saved to `relationships.xlsx`.  
+   - Extracted relationships are saved to `combined_results.xlsx`.  
    - Graphs and charts are displayed for better insights.  
 
