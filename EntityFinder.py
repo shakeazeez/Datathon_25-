@@ -16,16 +16,16 @@ elif torch.backends.mps.is_available():
 else:
     device = torch.device("cpu")  # Default to CPU
 
-# Load model and tokenizer
+# load model and tokenizer
 model_name = "dbmdz/bert-large-cased-finetuned-conll03-english"
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 ner_model = AutoModelForTokenClassification.from_pretrained(model_name).to(device)
 
-# Create NER pipeline
+# create NER pipeline
 ner_pipeline = pipeline("ner", model=ner_model, tokenizer=tokenizer, aggregation_strategy="simple", device=0 if device.type in ["cuda", "mps"] else -1)
 
 
-# Load SpaCy for dependency parsing
+# load SpaCy for dependency parsing
 nlp = spacy.load("en_core_web_sm")
 
 def load_dataset(file_path):
@@ -57,43 +57,42 @@ def extract_relationships(text):
 
 
 def visualize_relationships(relationships):
-    # Create a directed graph
+    # create a directed graph
     G = nx.DiGraph()
     for rel in relationships:
         G.add_edge(rel["Subject"], rel["Object"], label=rel["Relationship"])
     
-    # Define the layout of the graph for better spacing of nodes
+    # define the layout of the graph for better spacing of nodes
     pos = nx.spring_layout(G, k=3.0)
     
-    # Set up the figure with a white background
-    plt.figure(figsize=(12, 8), facecolor='white')  # Set entire figure background to white
+    # set up the figure with a white background
+    plt.figure(figsize=(12, 8), facecolor='white')  # set entire figure background to white
     ax = plt.gca()
-    ax.set_facecolor('white')  # Ensure the axes background is also white
+    ax.set_facecolor('white')  # ensure the axes background is also white
     
-    # Draw the nodes and edges with the most visible colors
+    
     nx.draw(
         G, pos, with_labels=True, 
-        node_color="lightblue",  # Set nodes to light blue for visibility
-        edge_color="black",  # Set edges to black for contrast against white background
-        node_size=3000,  # Adjust node size
-        font_size=10,  # Adjust label font size
-        font_color="black",  # Set font color to black for contrast
-        arrows=True,  # Ensure arrows are drawn for directed edges
-        edgecolors="black",  # Add black border around nodes for better clarity
-        linewidths=1.5,  # Set border width of nodes
-        width=2,  # Set edge width for better visibility
-        alpha=0.8  # Adjust transparency for clarity
+        node_color="lightblue",  
+        edge_color="black", 
+        node_size=3000,  
+        font_size=10,  
+        font_color="black",  
+        arrows=True,  
+        edgecolors="black", 
+        linewidths=1.5,  
+        width=2,  
+        alpha=0.8  
     )
     
-    # Draw edge labels to show relationships
+
     edge_labels = nx.get_edge_attributes(G, 'label')
     nx.draw_networkx_edge_labels(
         G, pos, edge_labels=edge_labels, 
-        font_color="black",  # Set edge label color to black
-        font_size=12  # Adjust font size
+        font_color="black",  
+        font_size=12  
     )
     
-    # Set title with black color for visibility
     plt.title("Entity Relationship Graph with Actions", color="black", fontsize=14)
     plt.show()
 
@@ -143,7 +142,7 @@ def analyze_and_visualize_crimes(categorized_data):
     
     print("Processing crime categories...")
     for _ in tqdm(range(10), desc="Generating visualization"):
-        pass  # Simulate loading
+        pass  
     
     fig = px.bar(crime_counts, x="Category", y="Frequency", 
                  title="Crime Categories", 
@@ -152,7 +151,7 @@ def analyze_and_visualize_crimes(categorized_data):
     fig.update_layout(xaxis_tickangle=45)
     fig.show()
 
-# Tokenization function with token type visualization
+# tokenization function with token type visualization
 def tokenize_text(text):
     text2 = merge_tokens(text)
     doc = nlp(text2)
@@ -166,12 +165,8 @@ def tokenize_text(text):
         print(f"{token}",end = " ")
 
 
-
-
-
-
 def main():
-    file_path = "Datasets/news_excerpts_parsed.xlsx"
+    file_path = "Datasets/news_excerpts_parsed.xlsx" #replace with a xlsx file you want to analyse
     data = load_dataset(file_path)
     
     while True:
